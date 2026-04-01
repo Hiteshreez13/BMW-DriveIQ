@@ -12,12 +12,23 @@ This mirrors real automotive signal processing:
 
 import numpy as np
 import pandas as pd
-from scipy.stats import skew, kurtosis
 from pathlib import Path
 
 
 WINDOW_SIZE = 10        # seconds per classification window
 STEP_SIZE = 5           # overlap step (50% overlap = more training samples)
+
+
+def _skew(x: np.ndarray) -> float:
+    """Sample skewness (matches scipy.stats.skew)."""
+    s = np.std(x)
+    return float(np.mean(((x - np.mean(x)) / s) ** 3)) if s else 0.0
+
+
+def _kurtosis(x: np.ndarray) -> float:
+    """Excess kurtosis (matches scipy.stats.kurtosis default fisher=True)."""
+    s = np.std(x)
+    return float(np.mean(((x - np.mean(x)) / s) ** 4) - 3) if s else 0.0
 
 
 def compute_jerk(accel: np.ndarray) -> np.ndarray:
@@ -118,9 +129,9 @@ def extract_window_features(window: pd.DataFrame) -> dict:
     feats["ttc_low_pct"]  = np.mean(ttc < 1.5)   # % time in danger zone
 
     # ── Statistical shape features ────────────────────────────────────────────
-    feats["speed_skew"]        = float(skew(sp))
-    feats["accel_kurtosis"]    = float(kurtosis(ac))
-    feats["steering_kurtosis"] = float(kurtosis(st))
+    feats["speed_skew"]        = _skew(sp)
+    feats["accel_kurtosis"]    = _kurtosis(ac)
+    feats["steering_kurtosis"] = _kurtosis(st)
 
     # ── Composite risk score (domain-engineered feature) ──────────────────────
     feats["risk_score"] = (
