@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BMW DriveIQ</title>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:      #e5000a;
+      --dark:     #080808;
+      --card-bg:  #0f0f0f;
+      --border:   #1a1a1a;
+      --muted:    #888;
+      --sw:       280px;
+    }
+
+    body {
+      background: var(--dark);
+      color: #fff;
+      font-family: 'Rajdhani', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    #layout {
+      display: grid;
+      grid-template-columns: var(--sw) 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      background: var(--dark);
+      border-right: 1px solid var(--border);
+      padding: 28px 20px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .logo { font-family: 'Orbitron', sans-serif; font-size: 22px; font-weight: 900; text-align: center; }
+    .logo .r { color: var(--red); }
+    .tagline { font-size: 10px; letter-spacing: 4px; color: #555; text-align: center; margin-top: 6px; margin-bottom: 24px; }
+
+    hr.div { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+    .sec-title { font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 3px; color: var(--muted); margin-bottom: 12px; }
+
+    .form-grp { margin-bottom: 16px; }
+    .form-grp label { display: block; font-size: 13px; color: #aaa; margin-bottom: 6px; }
+
+    select {
+      width: 100%; background: var(--card-bg); border: 1px solid #2a2a2a;
+      color: #fff; padding: 8px 10px; font-family: 'Rajdhani', sans-serif;
+      font-size: 14px; outline: none; cursor: pointer;
+    }
+    select:focus { border-color: var(--red); }
+
+    input[type="range"] { width: 100%; accent-color: var(--red); cursor: pointer; }
+
+    #run-btn {
+      width: 100%; background: var(--red); color: #fff; border: none;
+      padding: 12px; font-family: 'Orbitron', sans-serif; font-size: 11px;
+      letter-spacing: 2px; cursor: pointer; transition: background .15s; margin-top: 4px;
+    }
+    #run-btn:hover:not(:disabled) { background: #ff1a24; }
+    #run-btn:disabled { background: #333; cursor: not-allowed; }
+
+    .mc { background: var(--card-bg); border: 1px solid var(--border); border-left: 3px solid var(--red); padding: 14px 16px; margin-bottom: 10px; }
+    .mv { font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 700; }
+    .ml { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 3px; }
+
+    /* ── Main ── */
+    #main { padding: 32px 36px; overflow-y: auto; position: relative; }
+
+    /* Loading */
+    #loading {
+      position: fixed; top: 0; left: var(--sw); right: 0; bottom: 0;
+      background: rgba(8,8,8,.92); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+      z-index: 100; font-family: 'Orbitron', sans-serif;
+      font-size: 12px; letter-spacing: 2px; color: #aaa;
+    }
+    #loading.h { display: none; }
+
+    .spin {
+      width: 40px; height: 40px; border: 3px solid var(--border);
+      border-top-color: var(--red); border-radius: 50%;
+      animation: sp .8s linear infinite;
+    }
+    @keyframes sp { to { transform: rotate(360deg); } }
+
+    /* Header */
+    #hdr { padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    #hdr h1 {
+      font-family: 'Orbitron', sans-serif; font-size: 36px; font-weight: 900;
+      background: linear-gradient(90deg, #fff, var(--red));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    #hdr p { color: #666; font-size: 12px; letter-spacing: 4px; text-transform: uppercase; margin-top: 6px; }
+
+    /* KPI Row */
+    #kpi { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+    #kpi .mc { margin-bottom: 0; }
+    #kpi .mv { font-size: 17px; }
+
+    /* Tabs */
+    .tab-bar { display: flex; gap: 4px; border-bottom: 1px solid #2a2a2a; }
+    .tb {
+      background: #111; border: 1px solid #2a2a2a; border-bottom: none;
+      color: #aaa; font-family: 'Orbitron', sans-serif; font-size: 10px;
+      letter-spacing: 1px; padding: 10px 16px; cursor: pointer;
+      border-radius: 4px 4px 0 0; transition: all .15s; white-space: nowrap;
+    }
+    .tb:hover { color: #fff; background: #1a1a1a; border-color: var(--red); }
+    .tb.on { background: #1a0002; border-color: var(--red); border-bottom: 2px solid var(--red); color: #fff; }
+
+    .tp { display: none; padding-top: 24px; }
+    .tp.on { display: block; }
+
+    /* Grids */
+    .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .g3x2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .g4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+
+    .ct { font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; }
+    .sh { font-family: 'Orbitron', sans-serif; font-size: 14px; color: #fff; margin-bottom: 16px; letter-spacing: 1px; }
+
+    /* Report */
+    .rb {
+      background: #0d0000; border: 1px solid #2a0005; border-left: 3px solid var(--red);
+      padding: 24px 28px; border-radius: 2px; font-size: 15px; line-height: 1.8; color: #ddd;
+    }
+    .rb h3 { font-family: 'Orbitron', sans-serif; font-size: 13px; color: #fff; margin: 20px 0 8px; letter-spacing: 1px; }
+    .rb h1,.rb h2 { font-family: 'Orbitron', sans-serif; color: #fff; margin: 16px 0 8px; }
+    .rb ul { padding-left: 20px; margin: 8px 0; }
+    .rb li { margin-bottom: 4px; }
+    .rb strong { color: #fff; }
+    .rb hr { border-color: #2a0005; margin: 16px 0; }
+    .rb code { background: #1a0002; padding: 2px 6px; font-size: 13px; color: #ff8080; }
+
+    #gen-btn {
+      background: var(--red); color: #fff; border: none; padding: 12px 28px;
+      font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 2px;
+      cursor: pointer; margin-bottom: 20px; transition: background .15s;
+    }
+    #gen-btn:hover:not(:disabled) { background: #ff1a24; }
+    #gen-btn:disabled { background: #333; cursor: not-allowed; }
+
+    #dl-btn {
+      display: inline-block; background: transparent; color: var(--red);
+      border: 1px solid var(--red); padding: 8px 20px; font-family: 'Orbitron', sans-serif;
+      font-size: 10px; letter-spacing: 2px; cursor: pointer; margin-top: 12px;
+    }
+    #dl-btn:hover { background: var(--red); color: #fff; }
+
+    /* Notes */
+    .note { padding: 12px 16px; border-radius: 2px; margin-top: 16px; font-size: 14px; }
+    .ns { background: rgba(0,204,102,.1); border: 1px solid #00cc66; color: #00cc66; }
+    .nw { background: rgba(255,204,0,.1); border: 1px solid #ffcc00; color: #ffcc00; }
+
+    /* About */
+    .ag { display: grid; grid-template-columns: 3fr 2fr; gap: 20px; }
+
+    /* Footer */
+    #ftr { margin-top: 40px; border-top: 1px solid var(--border); padding-top: 16px; text-align: center; color: #333; font-size: 11px; letter-spacing: 3px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--dark); }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--red); }
+  </style>
+</head>
+<body>
+<div id="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside id="sidebar">
+    <div class="logo">BMW <span class="r">DriveIQ</span></div>
+    <div class="tagline">DRIVER INTELLIGENCE SYSTEM</div>
+
+    <hr class="div">
+    <div class="sec-title">SIMULATION CONTROLS</div>
+
+    <div class="form-grp">
+      <label>Driver Profile</label>
+      <select id="prof">
+        <option value="random">🎲 Random</option>
+        <option value="SMOOTH">SMOOTH</option>
+        <option value="AGGRESSIVE">AGGRESSIVE</option>
+        <option value="FATIGUED">FATIGUED</option>
+        <option value="SPORTY">SPORTY</option>
+        <option value="HIGHWAY_CRUISE">HIGHWAY_CRUISE</option>
+      </select>
+    </div>
+
+    <div class="form-grp">
+      <label>Trip Duration: <span id="dur-lbl">180</span>s</label>
+      <input type="range" id="dur" min="60" max="600" step="30" value="180">
+    </div>
+
+    <button id="run-btn" onclick="runAnalysis()">▶ ANALYSE DRIVER</button>
+
+    <div id="mstats" style="display:none; margin-top:20px;">
+      <hr class="div">
+      <div class="sec-title">MODEL STATS</div>
+      <div id="mstats-cards"></div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main id="main">
+    <div id="loading" class="h">
+      <div class="spin"></div>
+      <span>ANALYSING DRIVER TELEMETRY</span>
+    </div>
+
+    <div id="hdr">
+      <h1>BMW DriveIQ</h1>
+      <p>AI-Powered Driver Behaviour Intelligence System</p>
+    </div>
+
+    <div id="kpi"></div>
+
+    <div class="tab-bar">
+      <button class="tb on"  data-t="tele"   onclick="sw('tele')">📡 TELEMETRY</button>
+      <button class="tb"     data-t="cls"    onclick="sw('cls')">🧠 CLASSIFICATION</button>
+      <button class="tb"     data-t="risk"   onclick="sw('risk')">📊 RISK ANALYSIS</button>
+      <button class="tb"     data-t="rep"    onclick="sw('rep')">🤖 AI REPORT</button>
+      <button class="tb"     data-t="about"  onclick="sw('about')">ℹ️ ABOUT</button>
+    </div>
+
+    <!-- Telemetry -->
+    <div id="p-tele" class="tp on">
+      <div class="sh">Live Telemetry Feed</div>
+      <div class="g3x2">
+        <div><div class="ct">Speed (km/h)</div>      <div id="c-spd"   style="height:200px"></div></div>
+        <div><div class="ct">Engine RPM</div>        <div id="c-rpm"   style="height:200px"></div></div>
+        <div><div class="ct">Throttle &amp; Brake</div><div id="c-thr" style="height:200px"></div></div>
+        <div><div class="ct">Lateral G-Force</div>   <div id="c-lg"    style="height:200px"></div></div>
+        <div><div class="ct">Steering Angle (°)</div><div id="c-st"    style="height:200px"></div></div>
+        <div><div class="ct">Engine Load (%)</div>   <div id="c-el"    style="height:200px"></div></div>
+      </div>
+    </div>
+
+    <!-- Classification -->
+    <div id="p-cls" class="tp">
+      <div class="g2" style="margin-bottom:16px">
+        <div><div class="sh">Window-Level Classifications</div><div id="c-conf" style="height:320px"></div></div>
+        <div><div class="sh">Profile Distribution</div>        <div id="c-pie"  style="height:320px"></div></div>
+      </div>
+      <div id="cls-note"></div>
+    </div>
+
+    <!-- Risk -->
+    <div id="p-risk" class="tp">
+      <div class="sh">Risk Profile &amp; Safety Signals</div>
+      <div class="g2" style="margin-bottom:20px">
+        <div><div class="ct">Risk Score Over Time</div><div id="c-rs"  style="height:280px"></div></div>
+        <div><div class="ct">Risk Dimensions</div>    <div id="c-rad" style="height:280px"></div></div>
+      </div>
+      <div class="sh">Safety Metrics Breakdown</div>
+      <div class="g4" id="safety"></div>
+    </div>
+
+    <!-- Report -->
+    <div id="p-rep" class="tp">
+      <div class="sh">AI Coaching Report — Powered by Groq / LLaMA 3.3 70B</div>
+      <button id="gen-btn" onclick="genReport()">🤖 Generate Coaching Report</button>
+      <div id="rep-content"></div>
+    </div>
+
+    <!-- About -->
+    <div id="p-about" class="tp">
+      <div class="ag">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="rb">
+            <strong style="color:var(--red);font-family:Orbitron;font-size:13px;letter-spacing:2px">PROJECT OVERVIEW</strong><br><br>
+            BMW DriveIQ is a real-time driver behaviour intelligence system that classifies driving style from raw
+            vehicle telemetry using machine learning, then generates personalised coaching feedback powered by a
+            large language model.<br><br>
+            The system replicates the AI layer found inside BMW ConnectedDrive / iDrive 9 — turning sensor streams
+            into actionable, human-readable intelligence that helps drivers understand habits, manage risk, and
+            improve technique.
+          </div>
+          <div class="rb">
+            <strong style="color:var(--red);font-family:Orbitron;font-size:13px;letter-spacing:2px">HOW IT WORKS</strong><br><br>
+            <strong style="color:#ccc">1 — Telemetry Simulation</strong><br>
+            Physics-informed simulator generates realistic multi-channel vehicle telemetry for five driver archetypes.<br><br>
+            <strong style="color:#ccc">2 — Feature Engineering</strong><br>
+            Raw telemetry → 10-second sliding windows → 52 statistical features extracted per window.<br><br>
+            <strong style="color:#ccc">3 — XGBoost Classification</strong><br>
+            Gradient-boosted classifier trained on 11,600 labelled windows.
+            <strong style="color:var(--red)">99.5% test accuracy.</strong><br><br>
+            <strong style="color:#ccc">4 — LLM Coaching Layer</strong><br>
+            Classification + stats → Groq-hosted LLaMA 3.3 70B → personalised BMW-style coaching report.
+          </div>
+          <div class="rb">
+            <strong style="color:var(--red);font-family:Orbitron;font-size:13px;letter-spacing:2px">ABOUT THE BUILDER</strong><br><br>
+            <span style="color:#ccc;line-height:1.8">
+              Built by <strong style="color:#fff">Hiteshree Sharma</strong> as part of the AI/ML Engineering programme at
+              <strong style="color:#fff">Masters' Union, Gurugram</strong>.<br><br>
+              This project demonstrates end-to-end applied ML — bridging raw sensor data and human-intelligible driver
+              intelligence, with a production-grade UI built to BMW's digital ecosystem standard.
+            </span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="rb">
+            <strong style="color:var(--red);font-family:Orbitron;font-size:13px;letter-spacing:2px">DRIVER PROFILES</strong><br><br>
+            <span style="color:#00cc66;font-weight:700">● SMOOTH</span><br>
+            <span style="color:#888;font-size:13px">Controlled inputs. Low jerk, steady throttle. Risk: LOW.</span><br><br>
+            <span style="color:var(--red);font-weight:700">● AGGRESSIVE</span><br>
+            <span style="color:#888;font-size:13px">High throttle bursts, hard braking, sharp steering. Risk: HIGH.</span><br><br>
+            <span style="color:#ff6600;font-weight:700">● FATIGUED</span><br>
+            <span style="color:#888;font-size:13px">Erratic inputs, micro-corrections, late reactions. Risk: MEDIUM-HIGH.</span><br><br>
+            <span style="color:#ffcc00;font-weight:700">● SPORTY</span><br>
+            <span style="color:#888;font-size:13px">High-performance, elevated RPM but controlled. Risk: MEDIUM.</span><br><br>
+            <span style="color:#4488ff;font-weight:700">● HIGHWAY CRUISE</span><br>
+            <span style="color:#888;font-size:13px">Sustained high-speed, low-variance motorway driving. Risk: LOW.</span>
+          </div>
+          <div class="rb">
+            <strong style="color:var(--red);font-family:Orbitron;font-size:13px;letter-spacing:2px">TECHNOLOGY STACK</strong><br><br>
+            <strong style="color:#ccc">ML &amp; Data</strong><br>
+            <span style="color:#888">XGBoost · scikit-learn · pandas · NumPy · SciPy</span><br><br>
+            <strong style="color:#ccc">AI Coaching</strong><br>
+            <span style="color:#888">Groq API · LLaMA 3.3 70B Versatile</span><br><br>
+            <strong style="color:#ccc">Backend</strong><br>
+            <span style="color:#888">Python Serverless Functions · Vercel</span><br><br>
+            <strong style="color:#ccc">Frontend</strong><br>
+            <span style="color:#888">Vanilla JS · Plotly.js · HTML5 / CSS3</span>
+          </div>
+          <div class="rb" id="about-perf" style="display:none">
+            <strong style="color:var(--red);font-family:Orbitron;font-size:13px;letter-spacing:2px">MODEL PERFORMANCE</strong>
+            <div id="about-perf-body"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ftr">BMW DRIVEIQ · BUILT BY HITESHREE SHARMA · MASTERS' UNION GURUGRAM · AI/ML ENGINEERING</div>
+  </main>
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+const PC = { SMOOTH:'#00cc66', AGGRESSIVE:'#e5000a', FATIGUED:'#ff6600', SPORTY:'#ffcc00', HIGHWAY_CRUISE:'#4488ff' };
+const RL = { SMOOTH:'LOW', AGGRESSIVE:'HIGH', FATIGUED:'MEDIUM-HIGH', SPORTY:'MEDIUM', HIGHWAY_CRUISE:'LOW' };
+const RC = { LOW:'#00cc66', MEDIUM:'#ffcc00', 'MEDIUM-HIGH':'#ff6600', HIGH:'#e5000a' };
+const LN = {0:'SMOOTH',1:'AGGRESSIVE',2:'FATIGUED',3:'SPORTY',4:'HIGHWAY_CRUISE'};
+const RED='#e5000a', DBG='#0a0a0a';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = { tele:null, wins:null, prof:null, meta:null, report:null, tab:'tele' };
+
+// ── Dark layout factory ───────────────────────────────────────────────────────
+const DL = (x={}) => Object.assign({
+  paper_bgcolor:DBG, plot_bgcolor:DBG,
+  font:{color:'#fff',family:'Rajdhani',size:12},
+  xaxis:{gridcolor:'#1a1a1a',linecolor:'#333',zerolinecolor:'#333'},
+  yaxis:{gridcolor:'#1a1a1a',linecolor:'#333',zerolinecolor:'#333'},
+  margin:{l:44,r:16,t:12,b:36}
+}, x);
+
+const CFG = {responsive:true, displayModeBar:false};
+
+// ── Slider ────────────────────────────────────────────────────────────────────
+document.getElementById('dur').addEventListener('input', function(){ document.getElementById('dur-lbl').textContent=this.value; });
+
+// ── Loading ───────────────────────────────────────────────────────────────────
+function setLoad(on){ document.getElementById('loading').classList.toggle('h',!on); document.getElementById('run-btn').disabled=on; }
+
+// ── Run simulation ────────────────────────────────────────────────────────────
+async function runAnalysis(){
+  const prof = document.getElementById('prof').value;
+  const dur  = parseInt(document.getElementById('dur').value);
+  setLoad(true);
+  try {
+    const r = await fetch('/api/simulate',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ profile: prof==='random'?null:prof, duration:dur })
+    });
+    if(!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    S.tele=d.telemetry; S.wins=d.windows; S.prof=d.true_profile; S.meta=d.model_meta;
+    S.report=null;
+    document.getElementById('rep-content').innerHTML='';
+    renderAll();
+  } catch(e){ alert('Analysis failed: '+e.message); }
+  finally{ setLoad(false); }
+}
+
+// ── Generate report ───────────────────────────────────────────────────────────
+async function genReport(){
+  if(!S.wins) return;
+  const c=computed(), avg=avgStats();
+  const lbl = Object.entries(LN).find(([k,v])=>v===c.dom)?.[0]??0;
+  const btn=document.getElementById('gen-btn');
+  btn.disabled=true; btn.textContent='⏳ GENERATING REPORT...';
+  document.getElementById('rep-content').innerHTML='<div style="color:#555;font-size:13px;letter-spacing:2px;padding:20px 0;font-family:Orbitron">GROQ IS ANALYSING YOUR DRIVING PATTERNS...</div>';
+  try {
+    const r = await fetch('/api/report',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ stats:avg, predicted_label:parseInt(lbl), confidence:c.conf })
+    });
+    if(!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    S.report = d.report;
+    showReport();
+  } catch(e){ document.getElementById('rep-content').innerHTML=`<div style="color:var(--red)">Error: ${e.message}</div>`; }
+  finally{ btn.disabled=false; btn.textContent='🤖 Generate Coaching Report'; }
+}
+
+function showReport(){
+  if(!S.report) return;
+  const html = (typeof marked!=='undefined') ? marked.parse(S.report) : S.report.replace(/\n/g,'<br>');
+  document.getElementById('rep-content').innerHTML =
+    `<div class="rb">${html}</div>
+     <button id="dl-btn" onclick="dlReport()">📄 Download Report</button>`;
+}
+
+function dlReport(){
+  if(!S.report) return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([S.report],{type:'text/markdown'}));
+  a.download='bmw_driveiq_report.md'; a.click();
+}
+
+// ── Aggregates ────────────────────────────────────────────────────────────────
+function computed(){
+  if(!S.wins||!S.wins.length) return {};
+  const cnt={};
+  S.wins.forEach(w=>cnt[w.profile]=(cnt[w.profile]||0)+1);
+  const dom=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0];
+  const conf=S.wins.reduce((s,w)=>s+w.confidence,0)/S.wins.length;
+  const risk=RL[dom]||'UNKNOWN';
+  return {dom, conf, cnt, risk, rc:RC[risk]||'#888'};
+}
+
+function avgStats(){
+  if(!S.wins||!S.wins.length) return {};
+  const keys=Object.keys(S.wins[0].stats), avg={};
+  keys.forEach(k=>{ avg[k]=S.wins.reduce((s,w)=>s+(w.stats[k]||0),0)/S.wins.length; });
+  return avg;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll(){ renderMeta(); renderKPI(); renderTab(); }
+
+function renderMeta(){
+  if(!S.meta) return;
+  document.getElementById('mstats').style.display='block';
+  document.getElementById('mstats-cards').innerHTML=[
+    [`${(S.meta.accuracy*100).toFixed(1)}%`,'Test Accuracy'],
+    [S.meta.f1_weighted.toFixed(3),'F1 Score'],
+    [`${(S.meta.cv_mean*100).toFixed(1)}%`,'CV Accuracy'],
+  ].map(([v,l])=>`<div class="mc"><div class="mv">${v}</div><div class="ml">${l}</div></div>`).join('');
+  // About tab model perf
+  document.getElementById('about-perf').style.display='block';
+  document.getElementById('about-perf-body').innerHTML=`
+    <br><strong style="color:#ccc">Test Accuracy</strong><br>
+    <span style="color:var(--red);font-size:22px;font-family:Orbitron;font-weight:700">${(S.meta.accuracy*100).toFixed(2)}%</span><br><br>
+    <strong style="color:#ccc">F1 Score (weighted)</strong><br>
+    <span style="color:var(--red);font-size:22px;font-family:Orbitron;font-weight:700">${S.meta.f1_weighted.toFixed(4)}</span><br><br>
+    <strong style="color:#ccc">5-Fold CV Accuracy</strong><br>
+    <span style="color:var(--red);font-size:22px;font-family:Orbitron;font-weight:700">${(S.meta.cv_mean*100).toFixed(2)}%
+      <span style="font-size:13px;color:#555"> ± ${(S.meta.cv_std*100).toFixed(2)}%</span>
+    </span>`;
+}
+
+function renderKPI(){
+  const c=computed(), a=avgStats();
+  if(!c.dom) return;
+  document.getElementById('kpi').innerHTML=[
+    [c.dom,              'DRIVER PROFILE',   RED],
+    [`${(c.conf*100).toFixed(0)}%`, 'CONFIDENCE', '#fff'],
+    [`${(a.speed_mean||0).toFixed(0)} km/h`, 'AVG SPEED', '#fff'],
+    [(a.hard_brake_count||0).toFixed(1), 'HARD BRAKES/WIN', '#fff'],
+    [c.risk, 'RISK LEVEL', c.rc],
+  ].map(([v,l,col])=>`<div class="mc"><div class="mv" style="color:${col}">${v}</div><div class="ml">${l}</div></div>`).join('');
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function sw(t){
+  S.tab=t;
+  document.querySelectorAll('.tb').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  document.querySelectorAll('.tp').forEach(p=>p.classList.toggle('on',p.id===`p-${t}`));
+  if(S.wins) renderTab();
+}
+
+function renderTab(){
+  if(S.tab==='tele')  renderTele();
+  if(S.tab==='cls')   renderCls();
+  if(S.tab==='risk')  renderRisk();
+  if(S.tab==='rep')   renderRepTab();
+}
+
+// ── Tab 1: Telemetry ──────────────────────────────────────────────────────────
+function renderTele(){
+  if(!S.tele) return;
+  const t=S.tele.timestamp;
+  const ln=(y,color,name)=>[{x:t,y,mode:'lines',line:{color,width:1.5},showlegend:false,name}];
+  Plotly.newPlot('c-spd', ln(S.tele.speed_kmh,          RED,      'Speed'),  DL(),CFG);
+  Plotly.newPlot('c-rpm', ln(S.tele.rpm,                '#4488ff','RPM'),    DL(),CFG);
+  Plotly.newPlot('c-thr', [
+    {x:t,y:S.tele.throttle_pos,   mode:'lines',line:{color:'#00cc66',width:1.2},name:'Throttle'},
+    {x:t,y:S.tele.brake_pressure, mode:'lines',line:{color:RED,      width:1.2},name:'Brake'},
+  ], DL({showlegend:true,legend:{font:{color:'#fff'},bgcolor:'rgba(0,0,0,0)'}}), CFG);
+  Plotly.newPlot('c-lg',  ln(S.tele.lateral_g,          '#ffcc00','Lat G'),  DL(),CFG);
+  Plotly.newPlot('c-st',  ln(S.tele.steering_angle_deg, '#ff6600','Steer'),  DL(),CFG);
+  Plotly.newPlot('c-el',  ln(S.tele.engine_load_pct,    '#aa44ff','Load'),   DL(),CFG);
+}
+
+// ── Tab 2: Classification ─────────────────────────────────────────────────────
+function renderCls(){
+  if(!S.wins) return;
+  const c=computed();
+  Plotly.newPlot('c-conf',[{
+    x:S.wins.map(w=>w.window_start), y:S.wins.map(w=>w.confidence), type:'bar',
+    marker:{color:S.wins.map(w=>PC[w.profile]||'#888')},
+    hovertemplate:'<b>t=%{x}s</b><br>Profile: %{customdata}<br>Conf: %{y:.1%}<extra></extra>',
+    customdata:S.wins.map(w=>w.profile)
+  }], DL({yaxis:{gridcolor:'#1a1a1a',linecolor:'#333',range:[0,1],title:'Confidence'},
+          xaxis:{gridcolor:'#1a1a1a',linecolor:'#333',title:'Window Start (s)'}}), CFG);
+
+  const labs=Object.keys(c.cnt);
+  Plotly.newPlot('c-pie',[{
+    type:'pie', labels:labs, values:labs.map(l=>c.cnt[l]), hole:0.55,
+    marker:{colors:labs.map(l=>PC[l]||'#888')},
+    textfont:{color:'#fff',family:'Rajdhani',size:12}
+  }], DL({showlegend:true,legend:{font:{color:'#fff'},bgcolor:'rgba(0,0,0,0)'},margin:{l:16,r:16,t:16,b:16}}), CFG);
+
+  const match=c.dom===S.prof;
+  document.getElementById('cls-note').innerHTML = match
+    ? `<div class="note ns">✅ Correctly classified as <strong>${c.dom}</strong> (true profile: ${S.prof})</div>`
+    : `<div class="note nw">⚠️ Predicted <strong>${c.dom}</strong> | True profile was <strong>${S.prof}</strong></div>`;
+}
+
+// ── Tab 3: Risk ───────────────────────────────────────────────────────────────
+function renderRisk(){
+  if(!S.wins) return;
+  const a=avgStats();
+  const rs=S.wins.map(w=>w.risk_score);
+  const sorted=[...rs].sort((a,b)=>a-b);
+  const p75=sorted[Math.floor(sorted.length*.75)]||0;
+
+  Plotly.newPlot('c-rs',[{
+    x:rs.map((_,i)=>i), y:rs, mode:'lines+markers', type:'scatter',
+    line:{color:RED,width:2}, fill:'tozeroy', fillcolor:'rgba(229,0,10,0.15)',
+    marker:{color:rs.map(s=>s>p75?RED:'#333'),size:5}
+  }], DL({
+    shapes:[{type:'line',x0:0,x1:rs.length,y0:p75,y1:p75,line:{color:'#ff6600',dash:'dot',width:1}}],
+    annotations:[{x:rs.length-1,y:p75,text:'75th pct',showarrow:false,font:{color:'#ff6600',size:10},yshift:8}],
+    yaxis:{gridcolor:'#1a1a1a',linecolor:'#333',title:'Risk Score'},
+    xaxis:{gridcolor:'#1a1a1a',linecolor:'#333',title:'Window'}
+  }), CFG);
+
+  const dims=['Speed','Braking','Cornering','Throttle','Steering'];
+  const vals=[
+    Math.min((a.speed_mean||0)/150,1),
+    Math.min((a.hard_brake_count||0)/3,1),
+    Math.min((a.lateral_g_max||0)/0.8,1),
+    Math.min((a.throttle_high_pct||0)/0.5,1),
+    Math.min((a.steering_std||0)/20,1),
+  ];
+  Plotly.newPlot('c-rad',[{
+    type:'scatterpolar', r:[...vals,vals[0]], theta:[...dims,dims[0]],
+    fill:'toself', fillcolor:'rgba(229,0,10,0.2)',
+    line:{color:RED,width:2}, marker:{color:RED}
+  }], DL({
+    polar:{bgcolor:DBG,
+      radialaxis:{visible:true,range:[0,1],gridcolor:'#1a1a1a',tickfont:{color:'#555'}},
+      angularaxis:{gridcolor:'#1a1a1a',tickfont:{color:'#fff'}}},
+    margin:{l:40,r:40,t:20,b:20}
+  }), CFG);
+
+  document.getElementById('safety').innerHTML=[
+    ['Hard Brakes / window', (a.hard_brake_count||0).toFixed(2), (a.hard_brake_count||0)>0.5?RED:'#00cc66'],
+    ['Peak Lateral G',       `${(a.lateral_g_max||0).toFixed(3)}g`, (a.lateral_g_max||0)>0.4?RED:'#00cc66'],
+    ['TTC Danger %',         `${((a.ttc_low_pct||0)*100).toFixed(1)}%`, (a.ttc_low_pct||0)>0.1?RED:'#00cc66'],
+    ['Peak Jerk',            `${(a.jerk_max||0).toFixed(3)} m/s³`, (a.jerk_max||0)>3?RED:'#00cc66'],
+  ].map(([l,v,col])=>`<div class="mc"><div class="mv" style="color:${col};font-size:20px">${v}</div><div class="ml">${l}</div></div>`).join('');
+}
+
+// ── Tab 4: Report ─────────────────────────────────────────────────────────────
+function renderRepTab(){
+  if(S.report){ showReport(); return; }
+  if(document.getElementById('rep-content').innerHTML) return;
+  const c=computed(), a=avgStats();
+  document.getElementById('rep-content').innerHTML=`
+    <div class="rb">
+      <strong style="color:var(--red);font-family:Orbitron;font-size:14px">SESSION SUMMARY</strong><br><br>
+      <strong>Dominant Profile:</strong> ${c.dom}<br>
+      <strong>Risk Level:</strong> <span style="color:${c.rc}">${c.risk}</span><br>
+      <strong>Avg Speed:</strong> ${(a.speed_mean||0).toFixed(1)} km/h<br>
+      <strong>Peak Lateral G:</strong> ${(a.lateral_g_max||0).toFixed(3)}g<br>
+      <strong>Hard Brake Events:</strong> ${(a.hard_brake_count||0).toFixed(2)}/window<br>
+      <strong>Risk Score:</strong> ${(a.risk_score||0).toFixed(2)}<br><br>
+      <em style="color:#555">Click "Generate Coaching Report" above for the full AI analysis.</em>
+    </div>`;
+}
+
+// ── Auto-run ──────────────────────────────────────────────────────────────────
+window.addEventListener('load', ()=>runAnalysis());
+</script>
+</body>
+</html>
