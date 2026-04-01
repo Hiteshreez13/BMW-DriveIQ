@@ -1,6 +1,13 @@
 {
   "version": 2,
-  "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/public/index.html" }
+  "builds": [
+    { "src": "api/simulate.py", "use": "@vercel/python" },
+    { "src": "api/report.py",   "use": "@vercel/python" },
+    { "src": "public/**",       "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/simulate",   "dest": "/api/simulate.py" },
+    { "src": "/api/report",     "dest": "/api/report.py"   },
+    { "src": "/(.*)",           "dest": "/public/index.html" }
   ]
 }
